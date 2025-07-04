@@ -1,4 +1,5 @@
 import os
+import sys 
 import json
 import base64
 import requests
@@ -56,7 +57,7 @@ class MusicDownloader:
     
     def __init__(self, extra=None, dest_file=None):
         # load previous configurations
-        self.load_confi(dest_file=dest_file)
+        self.load_config(dest_file=dest_file)
         # change wdir to target directory and store dir
         self.target_folder = self.set_wdir(extra=extra)
         # get access tocken for interacting with spotify
@@ -79,11 +80,11 @@ class MusicDownloader:
         return home / "Desktop"
                 
     
-    def load_confi(self, dest_file=None):
-        """Load configurations"""
+    def load_config(self, config_file="conjugurations.json", dest_file=None):
+        """setup or load configutation file"""
 
-        if os.path.exists("configurarions.json"):
-            with open("confgurations.json", "r") as fhand:
+        if os.path.exists(config_file):
+            with open(config_file, "r") as fhand:
                     self.state = json.load(fhand)
                     
                     # change target folder
@@ -94,13 +95,22 @@ class MusicDownloader:
         else:
             self.state = {"local_folder": dest_file}
             # save configuration
-            with open("configurarions.json", "w") as fhand:
+            with open(config_file, "w") as fhand:
                 json.dump(self.state, fhand)
     
     def set_wdir(self, extra=None):
         """Set working directory to target directory"""
         # create target directory and change directory 
         target_dir = self.get_music_path(extra=extra) + self.state["local_folder"]
+        
+        # check if subfolder exists else create it
+        if not os.path.exists(target_dir):
+            try:
+                os.mkdir(target_dir)
+            except Exception as e:
+                sys.exit(f"Error {e} while creating target directory...")
+        
+        # change wdir to target_dir
         os.chdir(target_dir)
 
         return target_dir
@@ -130,15 +140,47 @@ class MusicDownloader:
 
 class Tester():
     def __inti__(self):
-        self.mdownloader = MusicDownloader()
+        self.mdownload = MusicDownloader()
         self.s_api = SpotifyAPI()
         self.dummy_conf 
 
     def md_setup(self):
         """Test if initial setup is done correctly"""
-        music_dir = self.mdownloader.get_music_path()
-        print(f"The music path in computer is: {music_dir}")
 
+        # create configuration file 
+        self.mdownload.load_config(config_file="dummy.json", dest_file="dummy_file1")
+        if os.path.exists("dummy.jason"):
+            print("Configuration file created succesfully!")
+        else:
+            print("No configuratrion file has been created...")
+            return 1
+
+        # load configuration file and change destination folder
+        self.mdownload.load_config(config_file="dummy.json", dest_file="dummy_file2")
+        if self.mdownload.state["local_file"] == "dummy_file2":
+            print("Destination folder update correctly!")
+        else:
+            print("Destination folder not updated...")
+            return 2
+        # remove configuration file 
+        os.remove("dummy.json")
+
+        # check music directory and set directory 
+        prog_dir = Path.cwd()
+        print(f"Music directory: {self.mdownload.get_music_path()}")
+        print(f"Destination dir. {self.mdownload.target_folder}")
+
+        if self.mdownload.target_folder == Path.cwd():
+            print("Working directory changed succesfuly!")
+            # change back to original dir and remove dummy folder
+            os.chdir(prog_dir)
+            os.rmdir(self.mdownload.target_folder)
+        
+        else:
+            print("Working directory not changed")
+            return 3
+
+        print("\nSet-up test PASSED!")
 
     def md_songs_to_download(self):
         pass
