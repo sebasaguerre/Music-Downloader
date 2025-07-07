@@ -3,6 +3,7 @@ import sys
 import json
 import base64
 import requests
+import argparse
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -55,13 +56,13 @@ class SpotifyAPI():
 
 class MusicDownloader:
     
-    def __init__(self, extra=None, dest_file=None):
-        # load previous configurations
-        self.load_config(dest_file=dest_file)
-        # change wdir to target directory and store dir
-        self.target_folder = self.set_wdir(extra=extra)
-        # get access tocken for interacting with spotify
-        self.access_token = self.get_access_token()
+    def __init__(self, test=False, config_file="configuration.json", extra=None, dest_file=None):
+        # standard setup when not testing:
+        if not test:
+            # load previous configurations
+            self.load_config(config_file=config_file, dest_file=dest_file)
+            # change wdir to target directory and store dir
+            self.target_folder = self.set_wdir(extra=extra)
 
     def get_music_path(self, extra=None):
         """Detect OS and on that basic get dir for music"""
@@ -84,13 +85,14 @@ class MusicDownloader:
         """setup or load configutation file"""
 
         if os.path.exists(config_file):
-            with open(config_file, "r") as fhand:
+            with open(config_file, "r+") as fhand:
                     self.state = json.load(fhand)
                     
-                    # change target folder
-                    if dest_file:
-                        self.state["local_file"] = dest_file
-                        json.dump(self.state, fhand)
+            # change target folder and save info
+            if dest_file:
+                self.state["local_file"] = dest_file
+                with open(config_file, "w") as fhand:
+                    json.dump(self.state, fhand)
         # initialize configurations
         else:
             self.state = {"local_folder": dest_file}
@@ -139,17 +141,16 @@ class MusicDownloader:
         pass
 
 class Tester():
-    def __inti__(self):
-        self.mdownload = MusicDownloader()
-        self.s_api = SpotifyAPI()
-        self.dummy_conf 
+    def __init__(self):
+        self.mdownload = MusicDownloader(test=True)
+        self.s_api = SpotifyAPI() 
 
-    def md_setup(self):
+    def setup(self):
         """Test if initial setup is done correctly"""
 
         # create configuration file 
         self.mdownload.load_config(config_file="dummy.json", dest_file="dummy_file1")
-        if os.path.exists("dummy.jason"):
+        if os.path.exists("dummy.json"):
             print("Configuration file created succesfully!")
         else:
             print("No configuratrion file has been created...")
@@ -181,21 +182,87 @@ class Tester():
             return 3
 
         print("\nSet-up test PASSED!")
-
-    def md_songs_to_download(self):
+    
+    def authentificate(self):
         pass
 
-    def md_download_song(self):
+    def authorize(self):
         pass
 
-    def md_song_metadata(self):
+    def get_local_songs(self):
+        pass
+
+    def get_spotify_playlist(self):
+        pass
+
+    def download_songs(self):
+        pass
+
+    def edit_metadata(self):
         pass
 
 
 def main():
-    mdownloader = MusicDownloader()
+    #  set up parser for arguments 
+    parser = argparse.ArgumentParser(
+        prog="m_downloader",
+        description="Music Downloader with setting parameters and tester",
+        usage="%(prog)s [--help] [--test OPTION] [--target-folder PATH] [--playlist NAME]")
+    
+    # add arguments 
+    parser.add_argument("--test",
+                        choices=["setup", "authent", "authorize", "local_songs",
+                                "get_playlist", "download_songs", "edit_metadata"],
+                        help="Test program setting (used for development).")
+    
+    parser.add_argument("--target-folder",
+                        help="Set-up destination folder. If folder dosen't exist create it.")
+    
+    parser.add_argument("--playlist",
+                        help="Set-up Spotify playlist to get playlists from.")
+    
+    # extract arguments 
+    args = parser.parse_args()
+    
+    # check if no arguments where given and show usage message
+    if not any([args.test, args.target_folder, args.playlist]):
+        print("""No arguments were given...
+              Intended use:
 
-    test = Tester()
+              m_downloader --target_folder 'destination folder' --playlist 'spotify playlist' --test 'testing option'
+
+              Note:
+                - For initial set-up both --target_folder and --playlist are mandatory.
+                  After initial set-up, both are used to change the initial setting, thus
+                  only one is really needed.
+              
+                - For a description of the arguments and their usage do: `m_downloader --help`
+              """)
+        sys.exit()
+
+    # set up tester only if on testing mode
+    if args.test:
+        test = Tester()
+
+        # run test depending on argument
+        if args.test == "setup":
+            test.setup()
+        elif args.test == "authent":
+            test.authenticate()
+        elif args.test == "authorize":
+            test.authorize()
+        elif args.test == "local_songs":
+            test.get_local_songs()
+        elif args.test == "get_playlist":
+            test.get_spotify_playlist()
+        elif args.test == "download_songs":
+            test.download_songs()
+        elif args.test == "edit_metadata":
+            test.edit_metadata()
+        
+        # exit program after running test
+        
+
 
 
 if __name__ == "__main__":
