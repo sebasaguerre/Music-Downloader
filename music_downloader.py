@@ -103,7 +103,7 @@ class MusicDownloader:
     def set_wdir(self, extra=None):
         """Set working directory to target directory"""
         # create target directory and change directory 
-        target_dir = self.get_music_path(extra=extra) + self.state["local_folder"]
+        target_dir = self.get_music_path(extra=extra) / self.state["local_folder"]
         
         # check if subfolder exists else create it
         if not os.path.exists(target_dir):
@@ -147,6 +147,7 @@ class Tester():
 
     def setup(self):
         """Test if initial setup is done correctly"""
+        print("Begin setup testing...\n")
 
         # create configuration file 
         self.mdownload.load_config(config_file="dummy.json", dest_file="dummy_file1")
@@ -168,14 +169,15 @@ class Tester():
 
         # check music directory and set directory 
         prog_dir = Path.cwd()
+        target_dir = self.mdownload.set_wdir()
         print(f"Music directory: {self.mdownload.get_music_path()}")
-        print(f"Destination dir. {self.mdownload.target_folder}")
+        print(f"Destination dir. {target_dir}")
 
-        if self.mdownload.target_folder == Path.cwd():
+        if target_dir == Path.cwd():
             print("Working directory changed succesfuly!")
             # change back to original dir and remove dummy folder
             os.chdir(prog_dir)
-            os.rmdir(self.mdownload.target_folder)
+            os.rmdir(target_dir)
         
         else:
             print("Working directory not changed")
