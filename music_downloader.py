@@ -7,16 +7,43 @@ import argparse
 from pathlib import Path
 from dotenv import load_dotenv
 
-class SpotifyAPI():
+class SpotifyOAuth():
     def __init__(self):
+       self.env_file = Path(".env")
        self.access_token = self.get_access_token()
+       self.self.load_credentials()
+
+    def load_credentials(self):
+        """
+        Load user data from .env into instance variables
+        or create .env file 
+        """
+
+        if self.env_file.exist():
+            load_dotenv()
+            self.client_id = os.getenv("SPOTIFY_CLIENT_ID")
+            self.client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
+            self.access_token = os.getenv("SPOTIFY_ACCESS_TOKEN")
+            self.refresh_token = os.getenv("SPOTIFY_REFRESH_TOKEN")
+        else:
+            print("No .env file found")
+
+            
     
-    def create_env_file(self, client_id, client_secret):
+    def create_env_file(self, client_id, client_secret, access_token=None, refresh_token=None):
         """Create .env file with credentials"""
+
+        # initial env content set up 
         env_content = f"""SPOTIFY_CLIENT_ID={client_id}
                     SPOTIFY_CLIENT_SECRET={client_secret}
                     SPOTIFY_REDIRECT_URI={self.redirect_uri}
                     """
+        
+        if access_token:
+            env_content += f"SPOTIFY_ACCESS_TOKEN={access_token}"
+        if refresh_token:
+            env_content += f"SPOTIFY_REDIRECT_URI={refresh_token}"
+
 
     def authenticate(self):
         """Authenticate with Spotify API and get access token"""
@@ -50,6 +77,11 @@ class SpotifyAPI():
             return self.authenticate()
         else:
             return self.authorize()
+
+
+class SpotifyAPI:
+    def __init__(self):
+        self.auth = SpotifyOAuth()
 
     def get_playlist(self):
         pass
@@ -264,8 +296,6 @@ def main():
         
         # exit program after running test
         
-
-
 
 if __name__ == "__main__":
     main()
