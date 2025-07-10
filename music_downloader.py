@@ -1,93 +1,11 @@
 import os
 import sys 
 import json
-import base64
-import requests
 import argparse
 from pathlib import Path
 from dotenv import load_dotenv
 
-class SpotifyOAuth():
-    def __init__(self):
-       self.env_file = Path(".env")
-       self.access_token = self.get_access_token()
-       self.self.load_credentials()
-
-    def load_credentials(self):
-        """
-        Load user data from .env into instance variables
-        or create .env file 
-        """
-
-        if self.env_file.exist():
-            load_dotenv()
-            self.client_id = os.getenv("SPOTIFY_CLIENT_ID")
-            self.client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
-            self.access_token = os.getenv("SPOTIFY_ACCESS_TOKEN")
-            self.refresh_token = os.getenv("SPOTIFY_REFRESH_TOKEN")
-        else:
-            print("No .env file found")
-
-            
-    
-    def create_env_file(self, client_id, client_secret, access_token=None, refresh_token=None):
-        """Create .env file with credentials"""
-
-        # initial env content set up 
-        env_content = f"""SPOTIFY_CLIENT_ID={client_id}
-                    SPOTIFY_CLIENT_SECRET={client_secret}
-                    SPOTIFY_REDIRECT_URI={self.redirect_uri}
-                    """
-        
-        if access_token:
-            env_content += f"SPOTIFY_ACCESS_TOKEN={access_token}"
-        if refresh_token:
-            env_content += f"SPOTIFY_REDIRECT_URI={refresh_token}"
-
-
-    def authenticate(self):
-        """Authenticate with Spotify API and get access token"""
-        # load credentials
-        load_dotenv()
-        client_id = os.getenv("SPOTIFY_CLIENT_ID")
-        client_secrete = os.getenv("SPOTIFY_CLIENT_SECRET")
-        credentials = f"{client_id}:{client_secrete}"
-        # convert to b64
-        cred_b64 = base64.b64encode(credentials.encode()).decode()
-
-        # headers for request 
-        header = {
-            "Authorization": f"Basic {cred_b64}",
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        # api requirements 
-        url = "https://accounts.spotify.com/api/token"
-        data = {"grant_type": "client_credentials"}
-
-        respose = requests.post(url, headers=header, data=data)
-        return respose.json()
-
-    def authorize(self):
-        pass
-
-    def get_access_token(self):
-        """Get access token via authentification or authorization"""
-
-        if os.path.exists("spotify_credentials"):
-            return self.authenticate()
-        else:
-            return self.authorize()
-
-
-class SpotifyAPI:
-    def __init__(self):
-        self.auth = SpotifyOAuth()
-
-    def get_playlist(self):
-        pass
-
 class MusicDownloader:
-    
     def __init__(self, test=False, config_file="configuration.json", extra=None, dest_file=None):
         # standard setup when not testing:
         if not test:
@@ -234,7 +152,6 @@ class Tester():
 
     def edit_metadata(self):
         pass
-
 
 def main():
     #  set up parser for arguments 
