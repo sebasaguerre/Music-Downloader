@@ -3,6 +3,7 @@ import os
 import time
 import base64
 import requests
+import tempfile
 import threading
 import webbrowser
 from dotenv import load_dotenv
@@ -11,9 +12,57 @@ import urllib.parse as url_parse
 from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-class CallbackHandler:
-    def __init__(self):
-        pass
+class CallbackHandler(BaseHTTPRequestHandler):
+    """Handle OAuth callback"""
+    def do_GET(self):
+        # parse the authorization code from the callback url
+        if "code=" in self.path:
+            # extract code from callback url
+            # callback url path example: "GET /callback?code=ABC123&state=xyz HTTP/1.1"
+            code = self.path.split("code=")[1].split("&")[0]
+
+            # store code in server instance 
+            self.server.auth_code = code
+
+            # send HTTP response back to browser
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+
+            # html response with JavaScript to cose browser automatically
+            html_autoclose_response = """
+            <html>
+            <head><title>Authorization Successful</title></head>
+            <body>
+                <h1>Authorization completed successfully!</h1>
+                <p>This window will close automatically in 2 seconds...</p>
+                <script>
+                    setTimeout(function() {
+                        window.close();
+                    }, 2000);
+                </script>
+            </body>
+            </html>
+            """
+            html_standard_response = b"""
+            <html>
+                <head><title>Success</title><head>
+                <body>
+                    <h1>Successful authorization! You can close this window.</h1>
+                </body>
+            </html>
+            """
+            self.wfile.write(html_autoclose_response.encode())
+
+        # error handeling
+        else:
+            self.send_response(400)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<h1>Error in authorization</h1>")
+    
+    def log_message(self, format, *args):
+        pass # suppress server log 
 
 class SpotifyOAuth():
     def __init__(self):
@@ -89,12 +138,13 @@ class SpotifyOAuth():
         params = {
             "client_id": self.client_id,
             "response_type": "code",
-            "redirect_url": self.redirect_url,
+            "redirect_uri": self.redirect_url,
             "scope": scope,
             "show_dialog": True 
         }
 
-        return f"{base_url}?{params}"
+        # oparser encoder converts the parameters into urls encoded format
+        return f"{base_url}?{url_parse.urlencode(params)}"
     
     def code_for_token(self, auth_code):
         """Exchange authorizatrion code for access token"""
@@ -123,7 +173,7 @@ class SpotifyOAuth():
         else:
             raise Exception(f"Token exchange failed: {response.text}")
 
-    def user_authorization(self):
+    def user_authorization(self, popup=False):
         """Get user authorization for playlist access"""
 
         # generate authorization URL 
@@ -139,8 +189,23 @@ class SpotifyOAuth():
         server_thread.daemon = True  # kill thread when server is shutdown 
         server_thread.start()
         
-        # open browser for user authorization
-        webbrowser.open(auth_url)
+        # open browser or popup for authorization
+        if not popup:
+            webbrowser.open(auth_url)
+        else:
+            # open html file and repplace placeholder
+            with open("spotify_auth.html", "r") as fhand:
+                html = fhand.read()
+            html = html.replace("AUTH_URL_PLACEHOLDER", auth_url)
+
+            # create temporal file 
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as fhand:
+                fhand.write(html)
+                temp_file = fhand.name 
+            
+            # open temporary file
+            webbrowser.open(f"file://{temp_file}")
+    
 
         # wait to receive authorizatoin code
         while server.auth_code is None:
@@ -149,6 +214,10 @@ class SpotifyOAuth():
         # extract code and  shutdown server
         auth_code = server.auth_code
         server.shutdown()
+
+        # clean-up temporary file if popup was used
+        if popup:
+            os.unlink(temp_file)
 
         # exchange code for tokens and save tokens to .env
         tokens = self.exchange_code_for_tokens(auth_code)
@@ -196,26 +265,51 @@ class SpotifyOAuth():
         # update instance variables
         self.access_token = tokens["access_token"]
         self.refresh_token = tokens["refresh_token"]
+        self.expires_at = expires_at
 
     def get_access_token(self):
         """
         Get access token if it has not yet expired or get a new one
         via the refresh token.
         """
-        
-        # if access token expires, get new one
-        if datetime.now().timestamp() > self.expires_at:
-            # if no refresh token go through authorization process
-            if not self.refresh_token():
-                return self.user_authorization()
-            # refresh access token 
-            url = "https://account.spotify.com/api/token"
-
-            credentials = f"{self.client_id}:{self.client_secret}"
-            credential_b64 = base64.b64encode(credentials.encode()).decode()
-            
-        else:
+        # if we have accesstoken and it is not expired use it 
+        if self.access_token and self.expires_at and datetime.now().timestamp() < float(self.expires_at):
             return self.access_token
+        # if expired and we have refresh token, refresh access token
+        elif self.refresh_token:
+            return self.refresh_access_token()
+        # else authentificate 
+        else: 
+            return self.user_authorization()
+
+    def refresh_access_token(self):
+        """Refresh accesstoken using refresh token"""
+        # refresh access token 
+        url = "https://account.spotify.com/api/token"
+
+        credentials = f"{self.client_id}:{self.client_secret}"
+        credentials_b64 = base64.b64encode(credentials.encode()).decode()
+
+        # headers and data for request.post 
+        headers = {
+            "Authorization": f"Basic {credentials_b64}",
+            "Content-Type": "application/x-www-forom-utlencoded"
+        }
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": self.refresh_token
+        }
+
+        response = requests.post(url, headers=headers, data=data)
+
+        if response.status_code == 200:
+            tokens = response.json()
+            self.save_token_to_env(tokens)
+            return self.access_token
+        else:
+            print("Token refresh fialed. Starting new authorization flow...")
+            return self.user_authorization()
+
 
     def authenticate(self):
         """Authenticate with Spotify API and get access token"""
@@ -240,13 +334,13 @@ class SpotifyOAuth():
         return respose.json()
 
 
-    def get_access_token(self):
-        """Get access token via authentification or authorization"""
+    # def get_access_token(self):
+    #     """Get access token via authentification or authorization"""
 
-        if os.path.exists("spotify_credentials"):
-            return self.authenticate()
-        else:
-            return self.authorize()
+    #     if os.path.exists("spotify_credentials"):
+    #         return self.authenticate()
+    #     else:
+    #         return self.authorize()
 
 
 class SpotifyAPI:

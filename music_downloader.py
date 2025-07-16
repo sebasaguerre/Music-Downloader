@@ -2,6 +2,7 @@ import os
 import sys 
 import json
 import argparse
+from auth_api import SpotifyOAuth, SpotifyAPI
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -92,8 +93,11 @@ class MusicDownloader:
 
 class Tester():
     def __init__(self):
+        # initialize all three classes
         self.mdownload = MusicDownloader(test=True)
-        self.s_api = SpotifyAPI() 
+        self.api = SpotifyAPI() 
+        self.oauth = SpotifyOAuth()
+
 
     def setup(self):
         """Test if initial setup is done correctly"""
@@ -135,6 +139,7 @@ class Tester():
 
         print("\nSet-up test PASSED!")
     
+    # currently this is unneeded thus we will not implement this at the time 
     def authentificate(self):
         pass
 
@@ -216,6 +221,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
-
-    

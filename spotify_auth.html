@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Spotify Authorization</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        button { padding: 15px 30px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Spotify Authorization Require</h1>
+        <p>Click the button bellow to authorize this application</p>
+        <button onclick="openSpotifyAuth()">Authorize with Spotify</button>
+        <div id="status"></div>
+    </div>
+    <script>
+        function openSpotifyAuth() {{
+            const popup = window.open(
+                "AUTH_URL_PLACEHOLDER",
+                "spotify_auth",
+                "width=500, height=600, scrollbars=yes, resizable=yes"
+            );
+            document.getElementById("status").innerHTML = "<p>Authorization window opened. Please complete the process...</p>";
+
+            // check if popup was closed (user completed authorization)
+            const checkClosed  = setInterval(function(){{
+                if (popup.closed) {{
+                    clearInterval(checkClosed);
+                    document.getElementById("status").innerHTML = "<p>Authorization complete! This page will close automatically...</p>";
+                    setTimeout(() => window.close(), 3000);
+                }}
+            }}, 1000);
+        }}
+    </script>
+</body>
+</html>
