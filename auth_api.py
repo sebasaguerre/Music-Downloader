@@ -6,7 +6,7 @@ import requests
 import tempfile
 import threading
 import webbrowser
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 from pathlib import Path
 import urllib.parse as url_parse
 from datetime import datetime, timedelta
@@ -65,49 +65,58 @@ class CallbackHandler(BaseHTTPRequestHandler):
         pass # suppress server log 
 
 class SpotifyOAuth():
-    def __init__(self):
+    def __init__(self, test=False):
         """Initialize with app credentials"""
-        self.env_file = Path(".env")
-        self.redirect_url = "http://localhost:8080/callback"
-        self.self.load_credentials()
-        self.access_token = self.get_access_token()
 
+        self.redirect_url = "http://127.0.0.1:8000/callback"
+        self.test = test
+
+        # set OAuth  based on test 
+        if not self.test:
+            self.env_file = Path(".env")
+            self.load_credentials()
+            self.access_token = self.get_access_token()
+        else:
+            # set ddummy path to manualy to create .env
+            # and proccede with authentificaiton 
+            self.env_file = Path("dummy.env")
+        
     def load_credentials(self):
         """
         Load user data from .env into instance variables
         or create .env file 
         """
 
-        if self.env_file.exist():
+        if self.env_file.exists():
             load_dotenv()
             self.client_id = os.getenv("SPOTIFY_CLIENT_ID")
             self.client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
             self.access_token = os.getenv("SPOTIFY_ACCESS_TOKEN")
             self.refresh_token = os.getenv("SPOTIFY_REFRESH_TOKEN")
             self.expires_at = os.getenv("EXPIRATION_DATE")
+            # convert expiration time to float
+            if self.expires_at:
+                self.expires_at = float(self.expires_at)
 
             if not self.client_id or not self.client_secret:
                 raise Exception("No SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET in .env file")
 
         else:
             raise Exception("No .env file found")
+            # for future create enviorment by pulling info from server
+            self.create_env_file()
     
     def create_env_file(self, client_id, client_secret, access_token=None, refresh_token=None):
         """Create .env file with credentials"""
 
-        # initial env content set up 
-        env_content = f"""SPOTIFY_CLIENT_ID={client_id}
-                    SPOTIFY_CLIENT_SECRET={client_secret}
-                    SPOTIFY_REDIRECT_URI={self.redirect_uri}
-                    """
-        
-        if access_token:
-            env_content += f"SPOTIFY_ACCESS_TOKEN={access_token}"
-        if refresh_token:
-            env_content += f"SPOTIFY_REDIRECT_URI={refresh_token}"
+        # initial env content 
+        set_key(self.env_file, "SPOTIFY_CLIENT_ID", client_id)
+        set_key(self.env_file, "SPOTIFY_CLIENT_SECRET", client_secret)
 
-        # write down content to .env file 
-        self.env_file.write_text(env_content)
+        if access_token:
+            set_key(self.env_file, "SPOTIFY_ACCESS_TOKEN", access_token)
+        if refresh_token:
+            set_key(self.env_file, "SPOTIFY_REFRESH_TOKEN", refresh_token)
 
         # load enviorment 
         self.load_credentials()
@@ -147,22 +156,29 @@ class SpotifyOAuth():
         return f"{base_url}?{url_parse.urlencode(params)}"
     
     def code_for_token(self, auth_code):
-        """Exchange authorizatrion code for access token"""
+        """
+        Exchange authorizatrion code for access token using
+        Basic Authentification:
+            Authentification: Basic base64encode('client_id:client_secret')
+        """
         url = "https://accounts.spotify.com/api/token"
+        
 
         # create basic auth header (app authentficatrion)
         credentials = f"{self.client_id}:{self.client_secret}"
-        credentials_b64 = base64.b64code(credentials.encode()).decode()
+        credentials_b64 = base64.b64encode(credentials.encode()).decode()
 
+        # meta data 
         headers = {
             "Authorization": f"Basic {credentials_b64}",
-            "Content-type": "application/x-www-form-urlencoded"
+            "Content-type": "application/x-www-form-urlencoded" # tells server the format of the data
         }
 
+        # actual contentn being send to API
         data = {
-            "Authorization": "authorization_code",
+            "grant_type": "authorization_code", # what do we want to do 
             "code": auth_code,
-            "redirect_url": self.redirect_url
+            "redirect_uri": self.redirect_url
         }
 
         # make request 
@@ -180,7 +196,7 @@ class SpotifyOAuth():
         auth_url = self.build_auth_url()
 
         # start local server to catch callback 
-        server = HTTPServer(("localhost", 8080), CallbackHandler)
+        server = HTTPServer(("localhost", 8000), CallbackHandler)
         server.auth_code = None
 
         # run server in background 
@@ -205,7 +221,6 @@ class SpotifyOAuth():
             
             # open temporary file
             webbrowser.open(f"file://{temp_file}")
-    
 
         # wait to receive authorizatoin code
         while server.auth_code is None:
@@ -220,52 +235,75 @@ class SpotifyOAuth():
             os.unlink(temp_file)
 
         # exchange code for tokens and save tokens to .env
-        tokens = self.exchange_code_for_tokens(auth_code)
+        tokens = self.code_for_token(auth_code)
+        if self.test: print("Tokens retrieved!\nSaving tokens...")
         self.save_tokens_to_env(tokens)
 
         return tokens
     
-    def save_token_to_env(self, tokens):
+    def save_tokens_to_env(self, tokens):
         """Save new tokens into .env file for future usage"""
-
-        existing_content = "" 
-        if self.env_file.exists():
-            existing_content = self.env_file.read_test()
-        
-        # update or add tokens
-        updated_lines = []
-        added_access = False
-        added_refresh = False
-
-        for line in existing_content.split("\n"):
-            # check for access token
-            if line.startswith("SPOTIFY_ACCESS_TOKEN="):
-                updated_lines.append(line)
-                added_access = True
-            # check for refresh toek
-            elif line.startswith("SPOTIFY_REFRESH_TOKEN="):
-                updated_lines.append(line)
-                added_refresh = True
-            else:
-                updated_lines.append(line)
-        
-        # add new lines if not found 
-        if not added_access:
-            updated_lines.append(f"SPOTIFY_ACCESS_TOKEN={tokens["access_token"]}")
-        if not added_refresh:
-            updated_lines.append(f"SPOTIFY_REFRESH_TOKEN={tokens["refresh_token"]}")
-
-        # add expiration time for access token 
         expires_at = datetime.now().timestamp() + tokens["expires_in"]
-        updated_lines.append(f"EXPIATION_DATE={expires_at}")
-        
-        # write tokens in .env file
-        self.env_file.write_text("\n".join(updated_lines))
+
+        # update enviroment variables
+        set_key(self.env_file, "SPOTIFY_ACCESS_TOKEN", tokens["access_token"])
+        set_key(self.env_file, "SPOTIFY_REFRESH_TOKEN", tokens["refresh_token"])
+        set_key(self.env_file, "EXPIRATION_DATE", str(expires_at))
 
         # update instance variables
         self.access_token = tokens["access_token"]
         self.refresh_token = tokens["refresh_token"]
         self.expires_at = expires_at
+
+    
+    # def save_tokens_to_env(self, tokens):
+    #     """Save new tokens into .env file for future usage"""
+
+    #     existing_content = "" 
+    #     if self.env_file.exists():
+    #         existing_content = self.env_file.read_text()
+        
+    #     # update or add tokens
+    #     updated_lines = []
+    #     added_access = False
+    #     added_refresh = False
+    #     added_expiration = False
+
+    #     # update tokens if they aready existed in the enviorment file 
+    #     for line in existing_content.split("\n"):
+    #         # check for access token
+    #         if line.startswith(f"SPOTIFY_ACCESS_TOKEN="):
+    #             updated_lines.append(f"SPOTIFY_ACCESS_TOKEN={tokens["access_token"]}")
+    #             added_access = True
+    #         # check for refresh token
+    #         elif line.startswith("SPOTIFY_REFRESH_TOKEN="):
+    #             updated_lines.append(f"SPOTIFY_REFRESH_TOKEN={tokens["refresh_token"]}")
+    #             added_refresh = True
+    #         # check if expiration date exists
+    #         elif line.startswith("EXPIRATION_DATE="):
+    #             expires_at = datetime.now().timestamp() + tokens["expires_in"]
+    #             updated_lines.append(f"EXPIRATION_DATE={expires_at}")
+    #             added_expiration = True 
+    #         else:
+    #             updated_lines.append(line)
+        
+    #     # add new lines if not found 
+    #     if not added_access:
+    #         updated_lines.append(f"SPOTIFY_ACCESS_TOKEN={tokens['access_token']}")
+    #     if not added_refresh:
+    #         updated_lines.append(f"SPOTIFY_REFRESH_TOKEN={tokens['refresh_token']}")
+    #     if not added_expiration:
+    #         # add expiration time for access token 
+    #         expires_at = datetime.now().timestamp() + tokens["expires in"]
+    #         updated_lines.append(f"EXPIRES_IN={expires_at}")
+
+    #     # write tokens in .env file
+    #     self.env_file.write_text("\n".join(updated_lines))
+
+    #     # update instance variables
+    #     self.access_token = tokens["access_token"]
+    #     self.refresh_token = tokens["refresh_token"]
+    #     self.expires_at = expires_at
 
     def get_access_token(self):
         """
@@ -307,7 +345,7 @@ class SpotifyOAuth():
             self.save_token_to_env(tokens)
             return self.access_token
         else:
-            print("Token refresh fialed. Starting new authorization flow...")
+            print("Token refresh failed. Starting new authorization flow...")
             return self.user_authorization()
 
 
@@ -345,7 +383,8 @@ class SpotifyOAuth():
 
 class SpotifyAPI:
     def __init__(self):
-        self.auth = SpotifyOAuth()
+        pass
+        # self.auth = SpotifyOAuth()
 
     def get_playlist(self):
         pass

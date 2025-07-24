@@ -96,8 +96,7 @@ class Tester():
         # initialize all three classes
         self.mdownload = MusicDownloader(test=True)
         self.api = SpotifyAPI() 
-        self.oauth = SpotifyOAuth()
-
+        self.oauth = SpotifyOAuth(test=True)
 
     def setup(self):
         """Test if initial setup is done correctly"""
@@ -138,13 +137,63 @@ class Tester():
             return 3
 
         print("\nSet-up test PASSED!")
+        return 0 
     
     # currently this is unneeded thus we will not implement this at the time 
     def authentificate(self):
         pass
 
     def authorize(self):
-        pass
+        
+        # create enviorment file 
+        load_dotenv(".env")
+        client_id = os.getenv("SPOTIFY_CLIENT_ID")
+        client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
+        self.oauth.create_env_file(client_id, client_secret)
+        if os.path.exists(self.oauth.env_file):
+            print(f"{self.oauth.env_file} file created!")
+        else:
+            print("Fail to create .env file...")
+            return 1
+
+        # test authorization proceess with and without popup
+        for val in [True, False]:
+            print(f"Testing authorization with popup={val}")
+            self.oauth.user_authorization(popup=val)
+            if self.oauth.access_token:
+                print("Access token retrieved!")
+            else:
+                print("No access token retireved...")
+                return 2
+            
+            if self.oauth.refresh_token:
+                print("Refresh token retrieved!")
+            else:
+                print("No refresh toeken retrieved...")
+                return 3
+            
+        # check if values have been store in environment
+        load_dotenv("dummy.env")
+        tokens = ["SPOTIFY_ACCESS_TOKEN", "SPOTIFY_REFRESH_TOKEN", "EXPIRATION_DATE"]
+        for token in tokens:
+            if os.getenv(token):
+                print(f"{token} stored in .env!")
+            else:
+                print(f"{token} not stored in .env file...")
+                return 4
+
+        # get new access_token via refresh token
+        self.oauth.access_token = None
+        self.oauth.refresh_access_token()
+        if self.oauth.access_token:
+            print("Access token refreshed succesfully!")
+        else:
+            print("Refresh process failed..") 
+
+        # remove dummy .env
+        os.remove(self.oauth.env_file)
+        print("\nOAuthorization test PASSED!")
+        return 0
 
     def get_local_songs(self):
         pass
@@ -215,8 +264,9 @@ def main():
             test.download_songs()
         elif args.test == "edit_metadata":
             test.edit_metadata()
-        
+
         # exit program after running test
+        return
         
 
 if __name__ == "__main__":
