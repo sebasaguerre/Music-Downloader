@@ -247,13 +247,16 @@ class SpotifyOAuth():
 
         # update enviroment variables
         set_key(self.env_file, "SPOTIFY_ACCESS_TOKEN", tokens["access_token"])
-        set_key(self.env_file, "SPOTIFY_REFRESH_TOKEN", tokens["refresh_token"])
         set_key(self.env_file, "EXPIRATION_DATE", str(expires_at))
 
         # update instance variables
         self.access_token = tokens["access_token"]
-        self.refresh_token = tokens["refresh_token"]
         self.expires_at = expires_at
+
+        # update refresh token if needed (often not required)
+        if "refresh_token" in tokens:
+            set_key(self.env_file, "SPOTIFY_REFRESH_TOKEN", tokens["refresh_token"])
+            self.refresh_token = tokens["refresh_token"]
 
     
     # def save_tokens_to_env(self, tokens):
@@ -323,7 +326,7 @@ class SpotifyOAuth():
     def refresh_access_token(self):
         """Refresh accesstoken using refresh token"""
         # refresh access token 
-        url = "https://account.spotify.com/api/token"
+        url = "https://accounts.spotify.com/api/token"
 
         credentials = f"{self.client_id}:{self.client_secret}"
         credentials_b64 = base64.b64encode(credentials.encode()).decode()
@@ -331,7 +334,7 @@ class SpotifyOAuth():
         # headers and data for request.post 
         headers = {
             "Authorization": f"Basic {credentials_b64}",
-            "Content-Type": "application/x-www-forom-utlencoded"
+            "Content-Type": "application/x-www-form-urlencoded"
         }
         data = {
             "grant_type": "refresh_token",
@@ -342,7 +345,7 @@ class SpotifyOAuth():
 
         if response.status_code == 200:
             tokens = response.json()
-            self.save_token_to_env(tokens)
+            self.save_tokens_to_env(tokens)
             return self.access_token
         else:
             print("Token refresh failed. Starting new authorization flow...")

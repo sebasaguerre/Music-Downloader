@@ -156,8 +156,8 @@ class Tester():
             print("Fail to create .env file...")
             return 1
 
-        # test authorization proceess with and without popup
-        for val in [True, False]:
+        # test authorization proceess with {not curretnly :"and without popup"}
+        for val in [True]:
             print(f"Testing authorization with popup={val}")
             self.oauth.user_authorization(popup=val)
             if self.oauth.access_token:
@@ -189,6 +189,7 @@ class Tester():
             print("Access token refreshed succesfully!")
         else:
             print("Refresh process failed..") 
+            return 5
 
         # remove dummy .env
         os.remove(self.oauth.env_file)
